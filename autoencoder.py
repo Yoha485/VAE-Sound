@@ -1,8 +1,9 @@
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, ReLU, Flatten, Dense, BatchNormalization, Conv2DTranspose, Reshape, Activation
 from tensorflow.keras import backend as K
-from tensorflow.keras.optimizer import Adam
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
+import os
 import numpy as np
 
 class Autoencoder: 
@@ -34,7 +35,7 @@ class Autoencoder:
     mse_loss = MeanSquaredError()
     self.model.compile(optimizer=optimizer, loss=mse_loss)
 
-  def train(selt, x_train, batch_size, num_epochs):
+  def train(self, x_train, batch_size, num_epochs):
     self.model.fit(x_train, x_train, batch_size, num_epochs, shuffle=True)
 
   def _build(self):
@@ -135,6 +136,39 @@ class Autoencoder:
     x = conv_transpose_layer(x)
     output_layer = Activation("sigmoid", name="sigmoid_layer")(x)
     return output_layer
+
+  def save(self, save_folder="."):
+    self._create_folder_if_it_doest_exist(save_folder)
+    self._save_parameters(save_folder)
+    self._save_weights(save_folder)
+
+  def _create_folder_if_it_doest_exist(self, folder):
+    if not os.path.exists(folder):
+      os.makedirs(folder)
+
+  def _save_parameters(self, save_folder):
+    parameters = [
+      self.input_shape,
+      self.conv_filters,
+      self.conv_kernels,
+      self.conv_strides,
+      self.latent_space_dim
+    ]  
+    save_path = os.path.join(save_folder, "parameters.pkl")
+    with open(save_path, 'wb') as f:
+      pickle.dump(parameters, f)
+
+  def _save_weights(self, save_folder):
+    save_path = os.path.join(save_folder, "weights.h5")
+    self.model.save_weights(save_path)
+
+  @classmethod
+  def load(cls, save_folder="."):
+    parameters_path = os.path.join(save_folder, "parameters.pkl")
+    with open(parameters_path, "rb") as f:
+      parameters = pickle.load(f)
+    autoencoder = Autoencoder(*parameters)
+    autoencoder.load_weights(weights_path)
 
 if __name__ == "__main__":
   autoencoder = Autoencoder(input_shape=(28,28,1), conv_filters=(32, 64, 64, 64), conv_kernels=(3, 3, 3, 3), conv_strides=(1, 2, 2, 1), latent_space_dim=2)
