@@ -1,11 +1,14 @@
 from tensorflow.keras import Model
-from tensorflow.keras.layers import Input, Conv2D, ReLU, Flatten, Dense, BatchNormalization, Conv2DTranspose, Reshape, Activation
+from tensorflow.keras.layers import Input, Conv2D, ReLU, Flatten, Dense, BatchNormalization, Conv2DTranspose, Reshape, Activation, Lambda
 from tensorflow.keras import backend as K
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
+import tensorflow as tf
 import numpy as np
 import pickle
 import os
+
+tf.compat.v1.disable_eager_execution()
 
 class Autoencoder: 
   
@@ -15,6 +18,7 @@ class Autoencoder:
     self.conv_kernels = conv_kernels
     self.conv_strides = conv_strides
     self.latent_space_dim = latent_space_dim
+    self.reconstruction_loss_weight = 1000
 
     self.encoder = None
     self.decoder = None
@@ -33,8 +37,7 @@ class Autoencoder:
 
   def compile(self, learning_rate):
     optimizer = Adam(learning_rate=learning_rate)
-    mse_loss = MeanSquaredError()
-    self.model.compile(optimizer=optimizer, loss=mse_loss)
+    self.model.compile(optimizer=optimizer, loss=self._calculate_combined_loss, metrics=[self._calculate_reconstruction_loss, self._calculate_kl_loss])
 
   def train(self, x_train, batch_size, num_epochs):
     self.model.fit(x_train, x_train, batch_size, num_epochs, shuffle=True)
@@ -57,7 +60,7 @@ class Autoencoder:
     self.encoder = Model(encoder_input, bottleneck, name="encoder")
 
   def _add_encoder_input(self):
-    return Input(shape=self.input_shape, name="encoder input")
+    return Input(shape=self.input_shape, name="encoder_input")
 
   def _add_conv_layers(self, encoder_input):
     x = encoder_input
@@ -80,9 +83,24 @@ class Autoencoder:
     return x
 
   def _add_bottleneck(self, x):
-    self._shape_before_bottleneck = K.int_shape(x)[1:] 
-    x = Flatten(name="encoder_flatten")(x)
-    x = Dense(self.latent_space_dim, name='encoder_output')(x)
+    """Flatten data and add bottleneck with Guassian sampling (Dense
+    layer).
+    """
+    self._shape_before_bottleneck = K.int_shape(x)[1:]
+    x = Flatten()(x)
+    self.mu = Dense(self.latent_space_dim, name="mu")(x)
+    self.log_variance = Dense(self.latent_space_dim,
+                              name="log_variance")(x)
+
+    def sample_point_from_normal_distribution(args):
+        mu, log_variance = args
+        epsilon = K.random_normal(shape=K.shape(self.mu), mean=0.,
+                                  stddev=1.)
+        sampled_point = mu + K.exp(log_variance / 2) * epsilon
+        return sampled_point
+
+    x = Lambda(sample_point_from_normal_distribution,
+               name="encoder_output")([self.mu, self.log_variance])
     return x
 
   def _build_decoder(self):
@@ -181,6 +199,19 @@ class Autoencoder:
     autoencoder.load_weights(weights_path)
     return autoencoder
 
+  def _calculate_combined_loss(self, y_target, y_predicted): 
+    reconstruction_loss = _calculate_combined_loss(y_target, y_predicted)
+    kl_loss = self._calculate_kl_loss(y_target, y_predicted)
+    combined_loss = self.reconstruction_loss_weight * reconstruction_loss + kl_loss
+
+  def _calculate_reconstruction_loss(self, y_target, y_predicted):
+    error = y_target - y_predicted
+    reconstruction_loss = K.mean(K.square(error), axis=[1, 2, 3])
+    return reconstruction_loss
+
+  def _calculate_kl_loss(self, y_target, y_predicted):
+    kl_loss = -0.5 * K.sum(1 + self.log_variance - K.square(self.mu) - K.exp(self.log_variance), axis=1)
+    return kl_loss
   
 
 if __name__ == "__main__":
