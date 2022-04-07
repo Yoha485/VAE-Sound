@@ -16,7 +16,6 @@ def load_mnist():
   x_test = x_test.astype('float32') / 255
   x_test = np.expand_dims(x_test, axis=3)
 
-  print(x_train.shape)
   return x_train, y_train, x_test, y_test
 
 def train(x_train, learning_rate, batch_size, epochs):
@@ -24,11 +23,10 @@ def train(x_train, learning_rate, batch_size, epochs):
   autoencoder.summary()
   autoencoder.compile(learning_rate)
   autoencoder.train(x_train, batch_size, epochs)
+  return autoencoder
   
 
 if __name__ == "__main__":
   x_train, _, _, _ = load_mnist()
-  autoencoder = train(x_train[:500], LEARNING_RATE, BATCH_SIZE, EPOCHS)
+  autoencoder = train(x_train[:10000], LEARNING_RATE, BATCH_SIZE, EPOCHS)
   autoencoder.save("model")
-  autoencoder2 = Autoencoder.load("load")
-  autoencoder2.summary()

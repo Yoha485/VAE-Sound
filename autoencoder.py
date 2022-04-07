@@ -3,8 +3,9 @@ from tensorflow.keras.layers import Input, Conv2D, ReLU, Flatten, Dense, BatchNo
 from tensorflow.keras import backend as K
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
-import os
 import numpy as np
+import pickle
+import os
 
 class Autoencoder: 
   
@@ -162,13 +163,25 @@ class Autoencoder:
     save_path = os.path.join(save_folder, "weights.h5")
     self.model.save_weights(save_path)
 
+  def load_weights(self, weights_path):
+    self.model.load_weights(weights_path)
+
+  def reconstruct(self, images):
+    latent_representations = self.encoder.predict(images)
+    reconstructed_images = self.decoder.predict(latent_representations)
+    return reconstructed_images, latent_representations
+
   @classmethod
   def load(cls, save_folder="."):
     parameters_path = os.path.join(save_folder, "parameters.pkl")
     with open(parameters_path, "rb") as f:
       parameters = pickle.load(f)
     autoencoder = Autoencoder(*parameters)
+    weights_path = os.path.join(save_folder, "weights.h5")
     autoencoder.load_weights(weights_path)
+    return autoencoder
+
+  
 
 if __name__ == "__main__":
   autoencoder = Autoencoder(input_shape=(28,28,1), conv_filters=(32, 64, 64, 64), conv_kernels=(3, 3, 3, 3), conv_strides=(1, 2, 2, 1), latent_space_dim=2)
